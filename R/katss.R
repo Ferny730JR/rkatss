@@ -1,48 +1,58 @@
 #' K-mer Counting
 #'
-#' Count the k-mers in a fastq, fasta, or raw sequences file
+#' Count the k-mers in a FASTQ, FASTA, raw sequences file, or a vector/list
+#' of sequences.
 #'
-#' @param file Name of the file which you want to count k-mers from
-#' The file has to be of either: raw sequences, fasta, or fastq format. Works
-#' with files using gzip compression. Other file types are currently unsupported
-#' and will not work properly if used.
+#' @param input Name of the file which you want to count k-mers from, or a
+#' character vector/list containing sequences. Files must contain raw sequences,
+#' FASTA, or FASTQ data. Gzip-compressed files are supported. A single character
+#' string is interpreted as a file path; vectors with multiple elements and
+#' lists are interpreted as sequences.
 #' @param kmer Length of the k-mer you want to count. Currently, only k-mers up
 #' to length 16 are supported.
-#' @param algo Whether to perform regular counts, or count shuffled sequences
-#' @param bootstrap_iters Number of iterations to bootstrap
-#' @param sample Percent to subsample during bootstrap (should be between 0-100%)
+#' @param algo Whether to perform regular counts, or count shuffled sequences.
+#' @param bootstrap_iters Number of iterations to bootstrap.
+#' @param sample Percent to subsample during bootstrap (should be between 0-100%).
 #' @param seed Specify the seed to be used by bootstrap. Since bootstrap
 #' subsamples random sequences, seeding alters which random sequences will be
 #' picked. This helps to ensure deterministic output which can be achieved by
 #' using the same seed. To pick a random seed, set `seed=-1`.
 #' @param klet Specify the k-let length to preserve during shuffling. This only
-#' affects the output is `algo="shuffled"` is set. -1 chooses the default value.
+#' affects the output if `algo="shuffled"` is set. -1 chooses the default value.
 #' @param sort Sort based on the counts from highest to lowest. Currently,
 #' the output given is sorted based on kmers (AA... first, TT... last).
 #' @param threads Number of threads to use. Currently not well optimized.
 #'
-#' @return Dataframe containing the counts for all k-mers
+#' @return Dataframe containing the counts for all k-mers.
 #' @useDynLib rkats, .registration = TRUE
 #' @export
 #'
 #' @examples
-#' # Create temporary file with sequences
 #' data(rbfox2_seqs)
+#'
+#' # Count di-nucleotides from a vector of sequences
+#' count_kmers(rbfox2_seqs$bound, kmer = 2)
+#'
+#' # Count a single sequence by wrapping it in a list, otherwise it will treat
+#' # it as a filename
+#' count_kmers(list("ACGTACGT"), kmer = 2)
+#'
+#' # Create temporary file with sequences
 #' tf <- tempfile()
 #' writeLines(rbfox2_seqs$bound, tf)
 #'
 #' # Count di-nucleotides in file
 #' count_kmers(tf, kmer = 2)
 #'
-#' # Count mono-nucleotide in file
+#' # Count mono-nucleotides in file
 #' count_kmers(tf, kmer = 1)
 #'
 #' # Count shuffled kmers
 #' count_kmers(tf, kmer = 1, algo = "shuffled")
-#' 
+#'
 #' # Specify k-let to preserve during shuffling
 #' count_kmers(tf, kmer = 1, algo = "shuffled", klet = 2)
-#' 
+#'
 #' # Count bootstrap kmers
 #' result <- count_kmers(tf, bootstrap_iters = 100)
 #' head(result)
@@ -50,57 +60,63 @@
 #' # Subsample 55.55% of the file per bootstrap iteration
 #' result <- count_kmers(tf, bootstrap_iters = 100, sample = 55.55)
 #' head(result)
-#' 
+#'
 #' # Count bootstrap shuffled kmers
 #' result <- count_kmers(tf, algo = "shuffled", bootstrap_iters = 100)
 #' head(result)
-#' 
+#'
 #' # Sort by count
 #' result <- count_kmers(tf, kmer = 5, sort = TRUE)
 #' head(result)
-#' 
+#'
 #' # Cleanup file
 #' unlink(tf)
-count_kmers <- function(file, kmer = 3, algo=c("regular","shuffled"),
-                        bootstrap_iters = 0, sample = 25, seed = -1, klet = -1, 
+count_kmers <- function(input, kmer = 3, algo=c("regular","shuffled"),
+                        bootstrap_iters = 0, sample = 25, seed = -1, klet = -1,
                         sort = FALSE, threads = 1) {
-  if(!is.character(file))
-    stop("file must be a character string")
+  if(!is.character(input) && !is.list(input))
+    stop("input must be a file path or a vector/list of sequences")
   if(!is.numeric(kmer) || kmer %% 1 != 0)
     stop("kmer must be an integer")
   if(!is.numeric(bootstrap_iters) || bootstrap_iters %% 1 != 0)
     stop("bootstrap_iters must be an integer")
   if(!is.numeric(sample) || sample <= 0 || 100 < sample)
     stop("sample must be a number between 0-100")
-  if(!is.numeric(seed) && seed %% 1 != 0)
+  if(!is.numeric(seed) || seed %% 1 != 0)
     stop("seed must be an integer")
   if(!is.numeric(klet) || klet %% 1 != 0)
     stop("klet must be an integer")
   if(!is.logical(sort))
     stop("sort must be logical")
-  if(!is.numeric(threads) && threads %% 1 != 0)
+  if(!is.numeric(threads) || threads %% 1 != 0)
     stop("threads must be an integer")
-  file <- path.expand(as.character(file))
-  sample = as.integer((sample*1000) %% 100001)
-  algo <- match.arg(algo)
-  if(algo == "regular") {
-    algo <- 1
+
+  if(is.list(input) || length(input) > 1) {
+    input <- unlist(input, use.names = FALSE)
+    if(!is.character(input) || anyNA(input))
+      stop("sequences must be character strings")
+    tmp <- tempfile()
+    on.exit(unlink(tmp), add = TRUE)
+    writeLines(input, tmp)
+    input <- tmp
   } else {
-    algo <- 2
+    input <- path.expand(input)
   }
 
-  return(.Call("count_kmers_R",
-               file,
-               as.integer(kmer),
-               as.integer(klet),
-               as.integer(sort),
-               as.integer(bootstrap_iters),
-               as.integer(sample),
-               as.integer(algo),
-               as.integer(seed),
-               as.integer(threads)
-               )
-         )
+  sample <- as.integer((sample*1000) %% 100001)
+  algo <- match.arg(algo)
+  algo <- if(algo == "regular") 1 else 2
+
+  .Call("count_kmers_R",
+        input,
+        as.integer(kmer),
+        as.integer(klet),
+        as.integer(sort),
+        as.integer(bootstrap_iters),
+        as.integer(sample),
+        as.integer(algo),
+        as.integer(seed),
+        as.integer(threads))
 }
 
 
