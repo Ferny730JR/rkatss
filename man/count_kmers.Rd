@@ -5,7 +5,7 @@
 \title{K-mer Counting}
 \usage{
 count_kmers(
-  file,
+  input,
   kmer = 3,
   algo = c("regular", "shuffled"),
   bootstrap_iters = 0,
@@ -17,19 +17,20 @@ count_kmers(
 )
 }
 \arguments{
-\item{file}{Name of the file which you want to count k-mers from
-The file has to be of either: raw sequences, fasta, or fastq format. Works
-with files using gzip compression. Other file types are currently unsupported
-and will not work properly if used.}
+\item{input}{Name of the file which you want to count k-mers from, or a
+character vector/list containing sequences. Files must contain raw sequences,
+FASTA, or FASTQ data. Gzip-compressed files are supported. A single character
+string is interpreted as a file path; vectors with multiple elements and
+lists are interpreted as sequences.}
 
 \item{kmer}{Length of the k-mer you want to count. Currently, only k-mers up
 to length 16 are supported.}
 
-\item{algo}{Whether to perform regular counts, or count shuffled sequences}
+\item{algo}{Whether to perform regular counts, or count shuffled sequences.}
 
-\item{bootstrap_iters}{Number of iterations to bootstrap}
+\item{bootstrap_iters}{Number of iterations to bootstrap.}
 
-\item{sample}{Percent to subsample during bootstrap (should be between 0-100\%)}
+\item{sample}{Percent to subsample during bootstrap (should be between 0-100\%).}
 
 \item{seed}{Specify the seed to be used by bootstrap. Since bootstrap
 subsamples random sequences, seeding alters which random sequences will be
@@ -37,7 +38,7 @@ picked. This helps to ensure deterministic output which can be achieved by
 using the same seed. To pick a random seed, set \code{seed=-1}.}
 
 \item{klet}{Specify the k-let length to preserve during shuffling. This only
-affects the output is \code{algo="shuffled"} is set. -1 chooses the default value.}
+affects the output if \code{algo="shuffled"} is set. -1 chooses the default value.}
 
 \item{sort}{Sort based on the counts from highest to lowest. Currently,
 the output given is sorted based on kmers (AA... first, TT... last).}
@@ -45,21 +46,30 @@ the output given is sorted based on kmers (AA... first, TT... last).}
 \item{threads}{Number of threads to use. Currently not well optimized.}
 }
 \value{
-Dataframe containing the counts for all k-mers
+Dataframe containing the counts for all k-mers.
 }
 \description{
-Count the k-mers in a fastq, fasta, or raw sequences file
+Count the k-mers in a FASTQ, FASTA, raw sequences file, or a vector/list
+of sequences.
 }
 \examples{
-# Create temporary file with sequences
 data(rbfox2_seqs)
+
+# Count di-nucleotides from a vector of sequences
+count_kmers(rbfox2_seqs$bound, kmer = 2)
+
+# Count a single sequence by wrapping it in a list, otherwise it will treat
+# it as a filename
+count_kmers(list("ACGTACGT"), kmer = 2)
+
+# Create temporary file with sequences
 tf <- tempfile()
 writeLines(rbfox2_seqs$bound, tf)
 
 # Count di-nucleotides in file
 count_kmers(tf, kmer = 2)
 
-# Count mono-nucleotide in file
+# Count mono-nucleotides in file
 count_kmers(tf, kmer = 1)
 
 # Count shuffled kmers

@@ -5,8 +5,8 @@
 \title{Calculate k-mer enrichments}
 \usage{
 enrichments(
-  testfile,
-  ctrlfile = NULL,
+  test,
+  ctrl = NULL,
   kmer = 3,
   algo = c("normal", "shuffled", "probabilistic", "shuf+prob"),
   bootstrap_iters = 0,
@@ -18,20 +18,24 @@ enrichments(
 )
 }
 \arguments{
-\item{testfile}{Test sequences. The file has to be of either: raw sequences,
-fasta, or fastq format. Works with files using gzip compression. Other file
-types are currently unsupported.}
+\item{test}{Test sequences. Either a file path or a character vector/list
+containing sequences. Files must contain raw sequences, FASTA, or FASTQ data.
+Gzip-compressed files are supported. A single character string is interpreted
+as a file path; vectors with multiple elements and lists are interpreted as
+sequences.}
 
-\item{ctrlfile}{Control sequences (optional). Same formats as testfile.}
+\item{ctrl}{Control sequences (optional). Either \code{NULL}, a file path, or
+a character vector/list containing sequences. The same formats and input
+rules as \code{test} apply.}
 
 \item{kmer}{Length of the k-mer to compute enrichments for. Currently, only
 k-mers up to length 16 are supported.}
 
-\item{algo}{The algorithm to use for computing enrichments}
+\item{algo}{The algorithm to use for computing enrichments.}
 
-\item{bootstrap_iters}{Number of iterations to bootstrap}
+\item{bootstrap_iters}{Number of iterations to bootstrap.}
 
-\item{sample}{Percent to subsample during bootstrap (should be between 0-100\%)}
+\item{sample}{Percent to subsample during bootstrap (should be between 0-100\%).}
 
 \item{seed}{Specify the seed to be used by bootstrap. Since bootstrap
 subsamples random sequences, seeding alters which random sequences will be
@@ -39,17 +43,17 @@ picked. This helps to ensure deterministic output which can be achieved by
 using the same seed. To pick a random seed, set \code{seed=-1}.}
 
 \item{klet}{Specify the k-let length to preserve during shuffling. This only
-affects the output is \code{algo="shuffled"} or \code{algo=shuf+prob} is set. -1
+affects the output if \code{algo="shuffled"} or \code{algo="shuf+prob"} is set. -1
 chooses the default recommended value.}
 
 \item{sort}{Sort data.frame based on the counts from highest to lowest.
-Currently, the output given is sorted alphabeticaly based on kmers.}
+Currently, the output given is sorted alphabetically based on k-mers.}
 
 \item{threads}{Number of threads to use. Currently not well optimized/not
 working.}
 }
 \value{
-data.frame containing the k-mer enrichments
+Data frame containing the k-mer enrichments.
 }
 \description{
 Calculate k-mer enrichments
@@ -58,6 +62,14 @@ Calculate k-mer enrichments
 # Load data
 data(rbfox2_seqs)
 
+# Use vectors of sequences directly
+result <- enrichments(rbfox2_seqs$bound, rbfox2_seqs$input)
+head(result)
+
+# Use a single sequence by wrapping it in a list
+result <- enrichments(list("ACGTACGT"), algo = "shuffled")
+head(result)
+
 # Create raw sequence files
 test_file <- tempfile()
 ctrl_file <- tempfile()
@@ -65,35 +77,32 @@ writeLines(rbfox2_seqs$bound, test_file)
 writeLines(rbfox2_seqs$input, ctrl_file)
 
 ## Get enrichments when you have a test and control dataset
-  # Default configuration
 result <- enrichments(test_file, ctrl_file)
 head(result)
-  # Modify the k-mer length
+
 result <- enrichments(test_file, ctrl_file, kmer = 5)
 head(result)
 
-
-## Get the enrichments without a control
-  # Shuffling (preferred)
-result <- enrichments(test_file, algo="shuffled", kmer = 5)
-head(result)
-  # Shuffling with custom k-let
-result <- enrichments(test_file, algo="shuffled", kmer = 5, klet = 5)
-head(result)
-  # Probabilistic
-result <- enrichments(test_file, algo="probabilistic", kmer = 5)
+## Get enrichments without a control
+result <- enrichments(test_file, algo = "shuffled", kmer = 5)
 head(result)
 
+result <- enrichments(test_file, algo = "shuffled", kmer = 5, klet = 5)
+head(result)
+
+result <- enrichments(test_file, algo = "probabilistic", kmer = 5)
+head(result)
 
 ## Enabling bootstrap
-  # Bootstrap on regular enrichments for 100 iterations
 result <- enrichments(test_file, ctrl_file, bootstrap_iters = 100)
 head(result)
-  # Setting the sample size to be 55.55\% of sequences per bootstrap iteration
-result <- enrichments(test_file, ctrl_file, bootstrap_iters = 100, sample = 55.55)
+
+result <- enrichments(test_file, ctrl_file, bootstrap_iters = 100,
+                      sample = 55.55)
 head(result)
-  # Bootstrap shuffled where kmer = klet
-result <- enrichments(test_file, algo = "shuffled", bootstrap_iters = 100, kmer = 5, klet = 5)
+
+result <- enrichments(test_file, algo = "shuffled",
+                      bootstrap_iters = 100, kmer = 5, klet = 5)
 head(result)
 
 # Cleanup files
