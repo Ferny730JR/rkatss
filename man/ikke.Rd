@@ -2,7 +2,7 @@
 % Please edit documentation in R/katss.R
 \name{ikke}
 \alias{ikke}
-\title{Title Iterative K-mer Knockout Enrichments}
+\title{Iterative K-mer Knockout Enrichments}
 \usage{
 ikke(
   testfile,
@@ -15,59 +15,68 @@ ikke(
 )
 }
 \arguments{
-\item{testfile}{Test sequences file. Can be in FASTQ, FASTA, or raw sequences
-format. Raw sequences format is a file containing only "A", "C", "G", and "T"
-/"U" characters, in every sequence separated by newline.}
+\item{testfile}{Test sequences. Either a file path or a character vector/list
+containing sequences. Files must contain raw sequences, FASTA, or FASTQ data.
+Gzip-compressed files are supported. A single character string is interpreted
+as a file path; vectors with multiple elements and lists are interpreted as
+sequences.}
 
-\item{ctrlfile}{Control sequences file. Can be in FASTQ, FASTA, or raw sequences
-format. Raw sequences format is a file containing only "A", "C", "G", and "T"
-/"U" characters, in every sequence separated by newline.}
+\item{ctrlfile}{Control sequences (optional). Either \code{NULL}, a file path, or
+a character vector/list containing sequences. The same formats and input
+rules as \code{testfile} apply.}
 
 \item{kmer}{Length of k-mer.}
 
-\item{iterations}{Number of iterations to perform}
+\item{iterations}{Number of iterations to perform.}
 
 \item{probabilistic}{Calculate probabilistic enrichments.}
 
-\item{normalize}{Normalize enrichments to log2}
+\item{normalize}{Normalize enrichments to log2.}
 
-\item{threads}{Number of threads to use. Specifying less than 1 thread
-sets the number of threads as 1.}
+\item{threads}{Number of threads to use. Specifying less than 1 thread sets
+the number of threads as 1.}
 }
 \value{
-data.frame containing the enrichments
+Data frame containing the enrichments.
 }
 \description{
-Title Iterative K-mer Knockout Enrichments
+Iterative K-mer Knockout Enrichments
 }
 \examples{
 # Load data
 data(rbfox2_seqs)
 
-test_seqs <- tempfile()
-writeLines(rbfox2_seqs$bound, test_seqs)
-
-# Get the enrichments without a control
-result <- ikke(test_seqs, probabilistic = TRUE)
+# Use a vector of sequences directly
+result <- ikke(rbfox2_seqs$bound, probabilistic = TRUE)
 head(result)
 
-# Get the 5-mer enrichments
-result <- ikke(test_seqs, kmer = 5, probabilistic = TRUE)
+# Use a single sequence by wrapping it in a list
+result <- ikke(list("ACGTACGT"), kmer = 2, probabilistic = TRUE)
 head(result)
 
-ctrl_seqs <- tempfile()
-writeLines(rbfox2_seqs$input, ctrl_seqs)
-
-# Get the enrichments when you have a control
-result <- ikke(test_seqs, ctrl_seqs, kmer = 5)
+# Use test and control sequence vectors
+result <- ikke(rbfox2_seqs$bound, rbfox2_seqs$input, kmer = 5)
 head(result)
 
 # Specify the number of enrichments to obtain
-result <- ikke(test_seqs, ctrl_seqs, kmer = 5, iterations = 2)
+result <- ikke(rbfox2_seqs$bound, rbfox2_seqs$input, kmer = 5,
+               iterations = 2)
 print(result)
 
 # Normalize enrichments to log2
-result <- ikke(test_seqs, ctrl_seqs, kmer = 5, normalize = TRUE)
+result <- ikke(rbfox2_seqs$bound, rbfox2_seqs$input, kmer = 5,
+               normalize = TRUE)
 head(result)
-tail(result)
+
+# File paths are also supported
+test_file <- tempfile()
+ctrl_file <- tempfile()
+writeLines(rbfox2_seqs$bound, test_file)
+writeLines(rbfox2_seqs$input, ctrl_file)
+
+result <- ikke(test_file, ctrl_file, kmer = 5)
+head(result)
+
+unlink(test_file)
+unlink(ctrl_file)
 }

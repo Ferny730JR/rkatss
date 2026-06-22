@@ -284,22 +284,24 @@ enrichments <- function(test, ctrl = NULL, kmer = 3,
 }
 
 
-#' Title Iterative K-mer Knockout Enrichments
+#' Iterative K-mer Knockout Enrichments
 #'
-#' @param testfile Test sequences file. Can be in FASTQ, FASTA, or raw sequences
-#' format. Raw sequences format is a file containing only "A", "C", "G", and "T"
-#' /"U" characters, in every sequence separated by newline.
-#' @param ctrlfile Control sequences file. Can be in FASTQ, FASTA, or raw sequences
-#' format. Raw sequences format is a file containing only "A", "C", "G", and "T"
-#' /"U" characters, in every sequence separated by newline.
+#' @param testfile Test sequences. Either a file path or a character vector/list
+#' containing sequences. Files must contain raw sequences, FASTA, or FASTQ data.
+#' Gzip-compressed files are supported. A single character string is interpreted
+#' as a file path; vectors with multiple elements and lists are interpreted as
+#' sequences.
+#' @param ctrlfile Control sequences (optional). Either `NULL`, a file path, or
+#' a character vector/list containing sequences. The same formats and input
+#' rules as `testfile` apply.
 #' @param kmer Length of k-mer.
-#' @param iterations Number of iterations to perform
-#' @param normalize  Normalize enrichments to log2
-#' @param threads    Number of threads to use. Specifying less than 1 thread
-#' sets the number of threads as 1.
+#' @param iterations Number of iterations to perform.
+#' @param normalize Normalize enrichments to log2.
+#' @param threads Number of threads to use. Specifying less than 1 thread sets
+#' the number of threads as 1.
 #' @param probabilistic Calculate probabilistic enrichments.
 #'
-#' @return data.frame containing the enrichments
+#' @return Data frame containing the enrichments.
 #' @useDynLib rkats, .registration = TRUE
 #' @export
 #'
@@ -307,69 +309,97 @@ enrichments <- function(test, ctrl = NULL, kmer = 3,
 #' # Load data
 #' data(rbfox2_seqs)
 #'
-#' test_seqs <- tempfile()
-#' writeLines(rbfox2_seqs$bound, test_seqs)
-#'
-#' # Get the enrichments without a control
-#' result <- ikke(test_seqs, probabilistic = TRUE)
+#' # Use a vector of sequences directly
+#' result <- ikke(rbfox2_seqs$bound, probabilistic = TRUE)
 #' head(result)
 #'
-#' # Get the 5-mer enrichments
-#' result <- ikke(test_seqs, kmer = 5, probabilistic = TRUE)
+#' # Use a single sequence by wrapping it in a list
+#' result <- ikke(list("ACGTACGT"), kmer = 2, probabilistic = TRUE)
 #' head(result)
 #'
-#' ctrl_seqs <- tempfile()
-#' writeLines(rbfox2_seqs$input, ctrl_seqs)
-#'
-#' # Get the enrichments when you have a control
-#' result <- ikke(test_seqs, ctrl_seqs, kmer = 5)
+#' # Use test and control sequence vectors
+#' result <- ikke(rbfox2_seqs$bound, rbfox2_seqs$input, kmer = 5)
 #' head(result)
 #'
 #' # Specify the number of enrichments to obtain
-#' result <- ikke(test_seqs, ctrl_seqs, kmer = 5, iterations = 2)
+#' result <- ikke(rbfox2_seqs$bound, rbfox2_seqs$input, kmer = 5,
+#'                iterations = 2)
 #' print(result)
 #'
 #' # Normalize enrichments to log2
-#' result <- ikke(test_seqs, ctrl_seqs, kmer = 5, normalize = TRUE)
+#' result <- ikke(rbfox2_seqs$bound, rbfox2_seqs$input, kmer = 5,
+#'                normalize = TRUE)
 #' head(result)
-#' tail(result)
+#'
+#' # File paths are also supported
+#' test_file <- tempfile()
+#' ctrl_file <- tempfile()
+#' writeLines(rbfox2_seqs$bound, test_file)
+#' writeLines(rbfox2_seqs$input, ctrl_file)
+#'
+#' result <- ikke(test_file, ctrl_file, kmer = 5)
+#' head(result)
+#'
+#' unlink(test_file)
+#' unlink(ctrl_file)
 ikke <- function(testfile, ctrlfile = NULL, kmer = 3, iterations = 10,
                  probabilistic = FALSE, normalize = FALSE, threads = 1) {
-  if(!is.character(testfile))
-    stop("testfile must be a character string")
-  testfile <- path.expand(testfile)
-
-  if(!is.character(ctrlfile) && !is.null(ctrlfile))
-    stop("ctrlfile must be a character string")
-  if(!is.null(ctrlfile))
-    ctrlfile <- path.expand(ctrlfile)
-
-  if(!is.numeric(kmer) && kmer != as.integer(kmer))
+  if(!is.character(testfile) && !is.list(testfile))
+    stop("testfile must be a file path or a vector/list of sequences")
+  if(!is.character(ctrlfile) && !is.list(ctrlfile) && !is.null(ctrlfile))
+    stop("ctrlfile must be NULL, a file path, or a vector/list of sequences")
+  if(!is.numeric(kmer) || kmer %% 1 != 0)
     stop("kmer must be an integer")
-  kmer <- as.integer(kmer)
-
-  if(!is.numeric(iterations) && iterations %% 1 != 0)
+  if(!is.numeric(iterations) || iterations %% 1 != 0)
     stop("iterations must be an integer")
-  iterations <- as.numeric(iterations)
-
   if(!is.logical(probabilistic))
-    stop("probabilistic must be either TRUE or FALSE")
-
-  if(!is.numeric(threads) && kmer != as.integer(threads))
+    stop("probabilistic must be logical")
+  if(!is.logical(normalize))
+    stop("normalize must be logical")
+  if(!is.numeric(threads) || threads %% 1 != 0)
     stop("threads must be an integer")
-  threads <- as.integer(threads)
 
-  if(probabilistic && !is.null(ctrlfile))
+  if(probabilistic && !is.null(ctrlfile)) {
     warning("Ignoring ctrlfile argument")
+    ctrlfile <- NULL
+  }
   if(!probabilistic && is.null(ctrlfile))
     stop("ctrlfile is required when using non-probabilistic ikke")
 
-  # Arguments seem correct, begin function call
-  result <- .Call("ikke_R", testfile, ctrlfile, kmer, iterations, probabilistic,
-                  normalize, threads)
-  if(!is.null(result)) {
-    return(result)
+  if(is.list(testfile) || length(testfile) > 1) {
+    testfile <- unlist(testfile, use.names = FALSE)
+    if(!is.character(testfile) || anyNA(testfile))
+      stop("test sequences must be character strings")
+    test_tmp <- tempfile()
+    on.exit(unlink(test_tmp), add = TRUE)
+    writeLines(testfile, test_tmp)
+    testfile <- test_tmp
+  } else {
+    testfile <- path.expand(testfile)
   }
+
+  if(!is.null(ctrlfile)) {
+    if(is.list(ctrlfile) || length(ctrlfile) > 1) {
+      ctrlfile <- unlist(ctrlfile, use.names = FALSE)
+      if(!is.character(ctrlfile) || anyNA(ctrlfile))
+        stop("control sequences must be character strings")
+      ctrl_tmp <- tempfile()
+      on.exit(unlink(ctrl_tmp), add = TRUE)
+      writeLines(ctrlfile, ctrl_tmp)
+      ctrlfile <- ctrl_tmp
+    } else {
+      ctrlfile <- path.expand(ctrlfile)
+    }
+  }
+
+  .Call("ikke_R",
+        testfile,
+        ctrlfile,
+        as.integer(kmer),
+        as.integer(iterations),
+        probabilistic,
+        normalize,
+        as.integer(threads))
 }
 
 

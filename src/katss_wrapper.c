@@ -198,7 +198,7 @@ ikke_R(SEXP test_file, SEXP ctrl_file, SEXP kmer, SEXP iterations, SEXP probabil
        SEXP normalize, SEXP threads)
 {
 	unsigned int c_kmer = INTEGER(kmer)[0];
-	uint64_t c_iterations = REAL(iterations)[0];
+	uint64_t c_iterations = INTEGER(iterations)[0];
 	bool c_normalize = asLogical(normalize) == TRUE;
 	int c_threads = INTEGER(threads)[0];
 
