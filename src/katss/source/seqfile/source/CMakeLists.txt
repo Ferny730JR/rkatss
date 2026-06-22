@@ -22,7 +22,7 @@ if(SEQF_BUILD_SHARED)
 		${THREAD_LIB} ${COMPRESSION_LIB})
 
 	target_compile_definitions(seqf_shared PRIVATE
-		_HAS_ISA_L_=$<BOOL:${KATSS_HAS_ISA_L}>
+		_HAS_ISA_L_=$<BOOL:${SEQF_HAS_ISA_L}>
 		${C11_THREADS_DEFINE})
 
 	set_target_properties(seqf_shared PROPERTIES
@@ -47,10 +47,10 @@ if(SEQF_BUILD_STATIC)
 		${THREAD_LIB} ${COMPRESSION_LIB})
 
 	target_compile_definitions(seqf_static PRIVATE
-		_HAS_ISA_L_=$<BOOL:${KATSS_HAS_ISA_L}>
+		_HAS_ISA_L_=$<BOOL:${SEQF_HAS_ISA_L}>
 		${C11_THREADS_DEFINE})
 
-	if(WIN32 AND MSVC)
+	if(WIN32)
 		set_target_properties(seqf_static PROPERTIES
 			VERSION ${PROJECT_VERSION}
 			OUTPUT_NAME seqf_static)
