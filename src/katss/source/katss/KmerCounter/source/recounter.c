@@ -25,7 +25,6 @@ struct threadinfo {
 };
 typedef struct threadinfo threadinfo;
 
-static char determine_filetype(const char *filename);
 static inline void cross_out(char *s1, const char *s2, char filetype);
 static void kctr_push(KatssCounter *counter, const char *str);
 
@@ -33,9 +32,6 @@ int
 katss_recount_kmer(KatssCounter *counter, const char *filename, const char *remove)
 {
 	int ret = 0;
-	char filetype = determine_filetype(filename);
-	if(filetype == 'e' || filetype == 'N')
-		return 1;
 
 	/* Clear counter */
 	uint64_t total = ((uint64_t)counter->capacity) + 1;
@@ -48,15 +44,15 @@ katss_recount_kmer(KatssCounter *counter, const char *filename, const char *remo
 	kctr_push(counter, remove);
 
 	/* Open SeqFile for reading */
-	char mode[2] = { 0 };
-	mode[0] = filetype == 'r' ? 's' : filetype;
-	SeqFile read_file = seqfopen(filename, mode);
+	SeqFile read_file = seqfopen(filename, "r");
 	if(read_file == NULL) { /* Error opening SeqFile */
 		error_message("katss: seqfopen: %s\n", seqfstrerror(seqferrno));
 		return 2;
 	}
 
 	/* Initialize hasher */
+	char filetype = seqftype(read_file);
+	filetype = (filetype == 's') ? 'r' : filetype;
 	KatssHasher *hasher = katss_init_hasher(counter->kmer, filetype);
 	if(hasher == NULL) {
 		seqfclose(read_file);
@@ -102,9 +98,6 @@ int
 katss_recount_kmer_shuffle(KatssCounter *counter, const char *file, int klet, const char *remove)
 {
 	int ret = 0;
-	char filetype = determine_filetype(file);
-	if(filetype == 'e' || filetype == 'N')
-		return 1;
 
 	/* Clear counter */
 	uint64_t total = ((uint64_t)counter->capacity) + 1;
@@ -117,15 +110,15 @@ katss_recount_kmer_shuffle(KatssCounter *counter, const char *file, int klet, co
 	kctr_push(counter, remove);
 
 	/* Open SeqFile for reading */
-	char mode[2] = { 0 };
-	mode[0] = filetype == 'r' ? 's' : filetype;
-	SeqFile read_file = seqfopen(file, mode);
+	SeqFile read_file = seqfopen(file, "r");
 	if(read_file == NULL) { /* Error opening SeqFile */
 		error_message("katss: seqfopen: %s\n", seqfstrerror(seqferrno));
 		return 2;
 	}
 
 	/* Initialize hasher */
+	char filetype = seqftype(read_file);
+	filetype = (filetype == 's') ? 'r' : filetype;
 	KatssHasher *hasher = katss_init_hasher(counter->kmer, filetype);
 	if(hasher == NULL) {
 		seqfclose(read_file);
@@ -225,11 +218,6 @@ katss_recount_kmer_mt(KatssCounter *counter, const char *filename, const char *r
 {
 	int ret = 0;
 
-	/* Check type of file, or throw error if not supported */
-	char filetype = determine_filetype(filename);
-	if(filetype == 'e' || filetype == 'N')
-		return 1;
-
 	/* Clear counter */
 	uint64_t total = ((uint64_t)counter->capacity) + 1;
 	if(counter->kmer <= 12)
@@ -245,13 +233,14 @@ katss_recount_kmer_mt(KatssCounter *counter, const char *filename, const char *r
 	threads = MIN2(threads, 128);
 
 	/* Open SeqFile for reading */
-	char mode[2] = { 0 };
-	mode[0] = filetype == 'r' ? 's' : filetype;
-	SeqFile read_file = seqfopen(filename, mode);
+	SeqFile read_file = seqfopen(filename, "r");
 	if(read_file == NULL) { /* Error opening SeqFile */
 		error_message("katss: seqfopen: %s\n", seqfstrerror(seqferrno));
 		return 2;
 	}
+
+	char filetype = seqftype(read_file);
+	filetype = (filetype == 's') ? 'r' : filetype;
 
 	/* Begin preparing threads */
 	threadinfo *jobarg = s_malloc(threads * sizeof *jobarg);
@@ -281,85 +270,6 @@ katss_recount_kmer_mt(KatssCounter *counter, const char *filename, const char *r
 /*==================================================================================================
 |                                         Helper Functions                                         |
 ==================================================================================================*/
-static bool
-is_nucleotide(char character)
-{
-	switch(character) {
-		case 'A':   return true;
-		case 'a':   return true;
-		case 'C':   return true;
-		case 'c':   return true;
-		case 'G':   return true;
-		case 'g':   return true;
-		case 'T':   return true;
-		case 't':   return true;
-		case 'U':   return true;
-		case 'u':   return true;
-		default:    return false;
-	}
-}
-
-static char
-determine_filetype(const char *file)
-{
-	/* Open the SeqFile, return 'e' upon error */
-	SeqFile reads_file = seqfopen(file, "b");
-	if(reads_file == NULL) {
-		error_message("katss: %s: %s", file, strerror(errno));
-		seqfclose(reads_file);
-		return 'N';
-	}
-
-	char buffer[BUFFER_SIZE];
-	int lines_read = 0;
-	int fastq_score_lines = 0;
-	int fasta_score_lines = 0;
-	int sequence_lines = 0;
-
-	while (seqfgets(reads_file, buffer, BUFFER_SIZE) != NULL && lines_read < 10) {
-		lines_read++;
-		char first_char = buffer[0];
-
-		/* Check if the first line starts with '@' for FASTQ */
-		if (first_char == '@' && lines_read % 4 == 1) {
-			fastq_score_lines++;
-
-		/* Check if the third line starts with '+' for FASTQ */
-		} else if (first_char == '+' && lines_read % 4 == 3) {
-			fastq_score_lines++;
-
-		/* Check if the line starts with '>' or ';' for FASTA */
-		} else if (first_char == '>' || first_char == ';') {
-			fasta_score_lines++;
-		} else {
-			// Check for nucleotide characters
-			int num_total = 0, num = 0;
-			for(int i = 0; buffer[i] != '\0'; i++) {
-				if(is_nucleotide(buffer[i])) {
-					num++;
-				}
-				num_total++;
-			}
-			if((double)num/num_total > 0.9) {
-				sequence_lines++;
-			}
-		}
-	}
-    seqfclose(reads_file);
-
-    if (fastq_score_lines >= 2) {
-        return 'q'; // fastq file
-	} else if (fasta_score_lines > 0) {
-		return 'a';
-    } else if (sequence_lines == 10) {
-        return 'r'; // raw sequences file
-    } else {
-		error_message("Unable to read sequence from file.\nCurrent supported file types are:"
-		              " FASTA, FASTQ, and file containing sequences per line.");
-        return 'e'; // unsupported file type
-    }
-}
-
 static inline void
 cross_out(char *s1, const char *s2, char filetype) {
 	register size_t s2_len = strlen(s2);

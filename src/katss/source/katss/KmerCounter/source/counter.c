@@ -34,29 +34,15 @@ typedef struct threadinfo threadinfo;
 
 /*============ Counting Function Declarations ============*/
 static KatssCounter *
-count_file(const char *filename, unsigned int kmer, const char filetype);
+count_file(const char *filename, unsigned int kmer);
 static int
 count_file_mt(void *arg);
-
-/*============= Helper Function Declarations =============*/
-static char
-determine_filetype(const char *filename);
-
-static bool
-is_nucleotide(char character);
 
 /*============= Actual Functions Declarations =============*/
 KatssCounter *
 katss_count_kmers(const char *filename, unsigned int kmer)
 {
-	char filetype = determine_filetype(filename);
-	if(filetype == 'e') { /* Error determining filetype */
-		return NULL;
-	} else if (filetype == 'N') { /* Error opening file */
-		return NULL;
-	}
-
-	KatssCounter *counter = count_file(filename, kmer, filetype);
+	KatssCounter *counter = count_file(filename, kmer);
 	return counter;
 }
 
@@ -73,17 +59,7 @@ katss_count_kmers_mt(const char *filename, unsigned int kmer, int threads)
 		return katss_count_kmers(filename, kmer);
 
 	/* Begin multithreaded computations */
-	char filetype = determine_filetype(filename);
-	if(filetype == 'e') { /* Error determining filetype */
-		return NULL;
-	} else if (filetype == 'N') { /* Error opening file */
-		return NULL;
-	}
-
-	/* Open SeqFile for reading */
-	char mode[2] = { 0 };
-	mode[0] = filetype == 'r' ? 's' : filetype;
-	SeqFile file = seqfopen(filename, mode);
+	SeqFile file = seqfopen(filename, "r");
 	if(file == NULL) {
 		warning_message("seqfopen: error %d: %s",seqferrno,seqfstrerror(seqferrno));
 		return NULL;
@@ -102,7 +78,7 @@ katss_count_kmers_mt(const char *filename, unsigned int kmer, int threads)
 		jobarg[i].seqfile = file;
 		jobarg[i].counter = counter;
 		jobarg[i].kmer = kmer;
-		jobarg[i].filetype = filetype;
+		jobarg[i].filetype = (seqftype(file) == 's') ? 'r' : seqftype(file);
 
 		/* Start threads */
 		thrd_create(&jobs[i], count_file_mt, &jobarg[i]);
@@ -125,10 +101,6 @@ KatssCounter *
 katss_count_kmers_bootstrap(const char *filename, unsigned int kmer,
                             int sample, unsigned int *seed)
 {
-	char filetype = determine_filetype(filename);
-	if(filetype == 'e' || filetype == 'N')
-		return NULL;
-
 	KatssCounter *counter = NULL;
 
 	/* Initialize buffer */
@@ -136,12 +108,11 @@ katss_count_kmers_bootstrap(const char *filename, unsigned int kmer,
 	uint32_t hash_value;
 
 	/* Open file and hasher */
-	buffer[0] = filetype == 'r' ? 'b' : filetype;
-	SeqFile read_file = seqfopen(filename, buffer);
+	SeqFile read_file = seqfopen(filename, "r");
 	if(read_file == NULL)
 		goto exit;
 	
-	KatssHasher *hasher = katss_init_hasher(kmer, filetype);
+	KatssHasher *hasher = katss_init_hasher(kmer, ' ');
 	if(hasher == NULL)
 		goto cleanup_file;
 	
@@ -153,10 +124,6 @@ katss_count_kmers_bootstrap(const char *filename, unsigned int kmer,
 	sample = MAX2(sample, 1);
 	sample = MIN2(sample, 100000);
 
-	/* Initialize random number generator */
-	thread_safe_rand_t *tsr = thread_safe_rand_init();
-
-	/* If no seed was provided create one */
 	unsigned int local_seed;
 	if(seed == NULL) {
 		local_seed = time(NULL);
@@ -164,10 +131,10 @@ katss_count_kmers_bootstrap(const char *filename, unsigned int kmer,
 	}
 
 	while(seqfgets_unlocked(read_file, buffer, BUFFER_SIZE)) {
-		if(thread_safe_rand_r(tsr, seed) % 100000 >= sample)
+		if(rand_r(seed) % 100000 >= sample)
 			continue;
-		katss_set_seq(hasher, buffer, filetype);
-		while(katss_get_fh(hasher, &hash_value, filetype)) {
+		katss_set_seq(hasher, buffer, 'r');
+		while(katss_get_fh(hasher, &hash_value, 'r')) {
 			katss_increment(counter, hash_value);
 		}
 	}
@@ -208,8 +175,8 @@ count_file_bootstrap_mt(void *arg)
 	while(seqfgets(args->seqfile, buffer, BUFFER_SIZE)) {
 		if(thread_safe_rand_r(tsr, args->seed) % 100000 >= args->sample)
 			continue;
-		katss_set_seq(hasher, buffer, args->filetype);
-		while(katss_get_fh(hasher, &hash_values[cur_hash], args->filetype)) {
+		katss_set_seq(hasher, buffer, 'r');
+		while(katss_get_fh(hasher, &hash_values[cur_hash], 'r')) {
 			if(++cur_hash == num_counts) { // begin flushing
 				katss_increments(args->counter, hash_values, cur_hash);
 				cur_hash = 0;
@@ -241,19 +208,12 @@ katss_count_kmers_bootstrap_mt(const char *filename, unsigned int kmer,
 	if(threads == 1)
 		return katss_count_kmers_bootstrap(filename, kmer, sample, seed);
 
-	/* Multi-threading */
-	char filetype = determine_filetype(filename);
-	if(filetype == 'e' || filetype == 'N')
-		return NULL;
-
 	/* sample should be between 1-100000 */
 	sample = MAX2(sample, 1);
 	sample = MIN2(sample, 100000);
 
 	/* Open SeqFile for reading */
-	char mode[2] = { 0 };
-	mode[0] = filetype == 'r' ? 's' : filetype;
-	SeqFile file = seqfopen(filename, mode);
+	SeqFile file = seqfopen(filename, "r");
 	if(file == NULL) {
 		warning_message("seqfopen: error %d: %s",seqferrno,seqfstrerror(seqferrno));
 		return NULL;
@@ -272,7 +232,7 @@ katss_count_kmers_bootstrap_mt(const char *filename, unsigned int kmer,
 		jobarg[i].seqfile = file;
 		jobarg[i].counter = counter;
 		jobarg[i].kmer = kmer;
-		jobarg[i].filetype = filetype;
+		jobarg[i].filetype = seqftype(file);
 		jobarg[i].sample = sample;
 		jobarg[i].seed = seed;
 
@@ -294,15 +254,23 @@ katss_count_kmers_bootstrap_mt(const char *filename, unsigned int kmer,
 
 
 static KatssCounter *
-count_file(const char *filename, unsigned int kmer, const char filetype)
+count_file(const char *filename, unsigned int kmer)
 {
 	KatssCounter *counter = NULL;
 
 	/* Open file and prepare counter & hasher */
-	SeqFile read_file = seqfopen(filename, "b");
-	if(read_file == NULL)
+	SeqFile read_file = seqfopen(filename, "r");
+	if(read_file == NULL) {
+		error_message("%s", seqfstrerror(seqferrno));
 		goto exit;
+	}
 
+	/* Extract and update filetype to binary */
+	char filetype = seqftype(read_file);
+	filetype = (filetype == 's') ? 'r' : filetype; // swap s to r
+	seqfsettype(read_file, 'b');
+
+	/* Open the hasher */
 	KatssHasher *hasher = katss_init_hasher(kmer, filetype);
 	if(hasher == NULL)
 		goto cleanup_file;
@@ -385,11 +353,6 @@ count_file_mt(void *arg)
 KatssCounter *
 katss_count_kmers_ushuffle(const char *filename, unsigned int kmer, int klet)
 {
-	/* Determine file type, or return NULL on error */
-	char filetype = determine_filetype(filename);
-	if(filetype == 'e' || filetype == 'N')
-		return NULL;
-
 	if(klet < 1)
 		return NULL;
 
@@ -401,13 +364,11 @@ katss_count_kmers_ushuffle(const char *filename, unsigned int kmer, int klet)
 	uint32_t hash_value;
 
 	/* Open file */
-	filetype = filetype == 'r' ? 's' : filetype;
-	buffer[0] = filetype;
-	SeqFile read_file = seqfopen(filename, buffer);
+	SeqFile read_file = seqfopen(filename, "r");
 	if(read_file == NULL)
 		goto exit;
 
-	KatssHasher *hasher = katss_init_hasher(kmer, filetype);
+	KatssHasher *hasher = katss_init_hasher(kmer, ' '); // filetype isnt used
 	if(hasher == NULL)
 		goto cleanup_file;
 
@@ -459,10 +420,6 @@ katss_count_kmers_ushuffle_bootstrap(const char *filename, unsigned int kmer,
 	if(klet < 1)
 		return NULL;
 
-	char filetype = determine_filetype(filename);
-	if(filetype == 'e' || filetype == 'N')
-		return NULL;
-
 	KatssCounter *counter = NULL;
 
 	/* Initialize buffer */
@@ -471,23 +428,19 @@ katss_count_kmers_ushuffle_bootstrap(const char *filename, unsigned int kmer,
 	uint32_t hash_value;
 
 	/* Open file and hasher */
-	buffer[0] = filetype == 'r' ? 's' : filetype;
-	SeqFile read_file = seqfopen(filename, buffer);
+	SeqFile read_file = seqfopen(filename, "r");
 	if(read_file == NULL)
 		goto exit;
 	
-	KatssHasher *hasher = katss_init_hasher(kmer, filetype);
+	KatssHasher *hasher = katss_init_hasher(kmer, ' ');
 	if(hasher == NULL)
 		goto cleanup_file;
-	
+
 	counter = katss_init_counter(kmer);
 	if(counter == NULL)
 		goto cleanup_hasher;
 
-	/* Initialize random number generator */
-	thread_safe_rand_t *tsr = thread_safe_rand_init();
-
-	/* If no seed was provided create one */
+	/* int to subsample from rand() */
 	unsigned int local_seed;
 	if(seed == NULL) {
 		local_seed = time(NULL);
@@ -497,7 +450,7 @@ katss_count_kmers_ushuffle_bootstrap(const char *filename, unsigned int kmer,
 	srand(1); // reset rand seed for shuffle
 	while(seqfgets_unlocked(read_file, buffer, BUFFER_SIZE)) {
 		/* Pick random sequences */
-		if(thread_safe_rand_r(tsr, seed) % 100000 >= sample)
+		if(rand_r(seed) % 100000 >= sample)
 			continue;
 		/* Shuffle sequences */
 		int seqlen = strlen(buffer);
@@ -523,89 +476,4 @@ exit:
 	free(buffer);
 	free(shuf);
 	return counter;
-}
-
-/*==============================================================
-|  Helper Functions                                            |
-==============================================================*/
-static char
-determine_filetype(const char *file)
-{
-	/* Open the SeqFile, return 'e' upon error */
-	SeqFile reads_file = seqfopen(file, "b");
-	if(reads_file == NULL) {
-		error_message("katss: %s: %s", file, seqfstrerror(seqferrno));
-		seqfclose(reads_file);
-		return 'N';
-	}
-
-	char buffer[BUFFER_SIZE];
-	int lines_read = 0;
-	int fastq_score_lines = 0;
-	int fasta_score_lines = 0;
-	int sequence_lines = 0;
-
-	while (seqfgets(reads_file, buffer, BUFFER_SIZE) != NULL && lines_read < 10) {
-		lines_read++;
-		char first_char = buffer[0];
-
-		/* Check if the first line starts with '@' for FASTQ */
-		if (first_char == '@' && lines_read % 4 == 1) {
-			fastq_score_lines++;
-
-		/* Check if the third line starts with '+' for FASTQ */
-		} else if (first_char == '+' && lines_read % 4 == 3) {
-			fastq_score_lines++;
-
-		/* Check if the line starts with '>' or ';' for FASTA */
-		/* TODO: fastq can potentially have a '>' or ';' in its quality score,
-		meaning that file can be incorrectly guessed as fasta when it is fastq */
-		} else if (first_char == '>' || first_char == ';') {
-			fasta_score_lines++;
-		} else {
-			// Check for nucleotide characters
-			int num_total = 0, num = 0;
-			for(int i = 0; buffer[i] != '\0'; i++) {
-				if(is_nucleotide(buffer[i])) {
-					num++;
-				}
-				num_total++;
-			}
-			if((double)num/num_total > 0.9) {
-				sequence_lines++;
-			}
-		}
-	}
-    seqfclose(reads_file);
-
-    if (fastq_score_lines >= 2) {
-        return 'q'; // fastq file
-	} else if (fasta_score_lines > 0) {
-		return 'a';
-    } else if (sequence_lines == 10) {
-        return 'r'; // raw sequences file
-    } else {
-		error_message("Unable to read sequence from file.\nCurrent supported file types are:"
-		              " FASTA, FASTQ, and file containing sequences per line.");
-        return 'e'; // unsupported file type
-    }
-}
-
-
-static bool
-is_nucleotide(char character)
-{
-	switch(character) {
-		case 'A':   return true;
-		case 'a':   return true;
-		case 'C':   return true;
-		case 'c':   return true;
-		case 'G':   return true;
-		case 'g':   return true;
-		case 'T':   return true;
-		case 't':   return true;
-		case 'U':   return true;
-		case 'u':   return true;
-		default:    return false;
-	}
 }
