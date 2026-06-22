@@ -111,7 +111,7 @@ get_pwms <- function(df, num_pwms=1, limit=Inf, limit_per_logo=Inf, type=c("DNA"
 plot_logo <- function(logo_list, ncol = NULL, method = c("bits","probability"),
                       title = "Weighted Sequence Logo", name = NULL, 
                       subtitle = NULL) {
-  if(is.list(logo_list)){
+  if(any(names(logo_list)=="n")) {
     pwm=logo_list[["pwm"]]
   } else{
     pwm=logo_list
