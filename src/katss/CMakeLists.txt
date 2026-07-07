@@ -1,10 +1,8 @@
-cmake_minimum_required(VERSION 3.9.0) # 3.9 for IPO
+cmake_minimum_required(VERSION 3.10.0)
 project(KATSS
 	VERSION 0.9.0
 	DESCRIPTION "K-mer counting function utilities."
 	LANGUAGES C)
-
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Default to a release build.
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
@@ -13,15 +11,16 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 set(CMAKE_C_STANDARD 11)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Check if C11 threads is supported, otherwise find any thread functionality
 include(CheckIncludeFile)
 CHECK_INCLUDE_FILE(threads.h HAVE_C11_THREADS)
 if(NOT HAVE_C11_THREADS)
-	set(THREAD_LIB tinycthread)
 	if(WIN32)
 		set(C11_THREADS_DEFINE "__STDC_NO_THREADS__=1")
 	endif()
+	set(THREAD_LIB tinycthread)
 else()
 	find_package(Threads REQUIRED)
 	set(THREAD_LIB Threads::Threads)
@@ -49,11 +48,6 @@ option(SKIP_INSTALL_LIBRARIES "Don't install shared and static libraries" OFF)
 option(SKIP_INSTALL_STATIC "Don't install static library" OFF)
 option(SKIP_INSTALL_SHARED "Don't install shared library" OFF)
 option(SKIP_INSTALL_HEADER "Don't install header files" OFF)
-
-# Find compression library
-find_package(ZLIB REQUIRED)
-set(COMPRESSION_LIB ZLIB::ZLIB)
-set(COMPRESSION_INC "")
 
 set(CMAKE_C_FLAGS_DEBUG "-O0 -ggdb3")
 

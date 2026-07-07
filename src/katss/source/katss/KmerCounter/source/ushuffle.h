@@ -35,7 +35,7 @@ void shuffle(const char *s, char *t, int l, int k);
 void shuffle1(const char *s, int l, int k);
 void shuffle2(char *t);
 
-#if defined (_WIN32) || defined (_WIN64)
+#if defined(_WIN32) || defined(_WIN64)
 typedef int (*randfunc_t)();
 #else
 typedef long (*randfunc_t)();

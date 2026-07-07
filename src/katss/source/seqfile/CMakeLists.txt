@@ -10,24 +10,8 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 	set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build" FORCE)
 endif()
 
-set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD 17)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
-include(CheckIncludeFile)
-CHECK_INCLUDE_FILE(threads.h HAVE_C11_THREADS)
-if(NOT HAVE_C11_THREADS)
-	set(THREAD_LIB tinycthread)
-	# Windows sometimes has the DLL but not the header, so explicitly define
-	# the no threads header to prevent SeqFile from trying to use the 
-	# `threads.h` header file on Windows.
-	if(WIN32)
-		set(C11_THREADS_DEFINE "__STDC_NO_THREADS__=1")
-	endif()
-else()
-	find_package(Threads REQUIRED)
-	set(THREAD_LIB Threads::Threads)
-	set(NO_C11_THREADS_DEFINE "")
-endif()
 
 include(CheckIPOSupported)
 check_ipo_supported(RESULT ipo_is_supported OUTPUT ipo_error)

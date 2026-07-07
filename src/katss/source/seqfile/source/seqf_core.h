@@ -17,10 +17,10 @@
 #	include <zlib.h>
 #endif
 
-#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L) && !defined(__STDC_NO_THREADS__)
+#if SEQF_USE_C11_THREADS
 #	include <threads.h>
 #else
-#	include <tinycthread.h>
+#	include "tinycthread.h"
 #endif
 
 #include "seqfile.h"
@@ -57,7 +57,7 @@ struct seqf_state {
 typedef struct seqf_state *seqf_statep;
 
 /* Define file mode macros */
-#define SEQF_READ   0b00000001
-#define SEQF_WRITE  0b00000010
+#define SEQF_READ   0x00000001
+#define SEQF_WRITE  0x00000002
 
 #endif // SEQFCORE_H
