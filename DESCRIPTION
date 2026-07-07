@@ -29,7 +29,7 @@ Depends:
     scales,
     vctrs
 Imports: stringr, stats
-SystemRequirements: cmake (>= 3.7.1)
+SystemRequirements: cmake (>= 3.12.0)
 LazyData: true
 License: MIT + file LICENSE
 Encoding: UTF-8
