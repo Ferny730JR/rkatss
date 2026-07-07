@@ -270,6 +270,47 @@ ikke_R(SEXP test_file, SEXP ctrl_file, SEXP kmer, SEXP iterations, SEXP probabil
 	return df;
 }
 
+/* presence_R */
+SEXP
+presence_R(
+	SEXP filename,
+	SEXP kmer,
+	SEXP klet,
+	SEXP sort,
+	SEXP iters, 
+    SEXP sample,
+	SEXP algo,
+	SEXP seed,
+	SEXP threads
+)
+{
+	const char *c_filename = CHAR(STRING_ELT(filename, 0));
+
+	/* Initialize the options */
+	KatssOptions opts;
+	katss_init_options(&opts);
+
+	/* Modify the options based on user input */
+	opts.kmer = INTEGER(kmer)[0];
+	opts.probs_ntprec = INTEGER(klet)[0];
+	opts.sort_enrichments = INTEGER(sort)[0];
+	opts.bootstrap_iters = INTEGER(iters)[0];
+	opts.bootstrap_sample = INTEGER(sample)[0];
+	opts.seed = INTEGER(seed)[0];
+	opts.threads = INTEGER(threads)[0];
+	opts.enable_warnings = true;
+	switch(INTEGER(algo)[0]) {
+	case 1: opts.probs_algo = KATSS_PROBS_NONE;     break;
+	case 2: opts.probs_algo = KATSS_PROBS_USHUFFLE; break;
+	default: return R_NilValue; // branch shouldn't be reached but silences warnings
+	}
+
+	/* Compute the results */
+	KatssData *result = katss_presence(c_filename, &opts);
+
+	/* Turn result into an R data.frame and return it */
+	return katssdata_to_df(result, &opts, ALGO_COUNT);
+}
 
 static inline double
 seqseq_single_R(const char *seq, const char *search)

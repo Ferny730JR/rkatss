@@ -403,6 +403,90 @@ ikke <- function(testfile, ctrlfile = NULL, kmer = 3, iterations = 10,
 }
 
 
+#' Count k-mer presence in a sequence
+#'
+#' Count the k-mer presence in a FASTQ, FASTA, raw sequences file, or a vector/list
+#' of sequences. k-mer presence the number of sequences in which a k-mer appears.
+#' That means that a k-mer is counted at most 1 time per sequnce (no repeats).
+#' The final table then represents how many sequences a given k-mer is present in
+#' given a dataset.
+#'
+#' @param input Name of the file which you want to count k-mers presence from, or a
+#' character vector/list containing sequences. Files must contain raw sequences,
+#' FASTA, or FASTQ data. Gzip-compressed files are supported. A single character
+#' string is interpreted as a file path; vectors with multiple elements and
+#' lists are interpreted as raw sequences.
+#' @param kmer Length of the k-mer you want to count. Currently, only k-mers up
+#' to length 15 are supported.
+#' @param algo Whether to perform regular counts, or count shuffled sequences.
+#' @param bootstrap_iters Number of iterations to bootstrap.
+#' @param sample Percent to subsample during bootstrap (should be between 0-100%).
+#' @param seed Specify the seed to be used by bootstrap. Since bootstrap
+#' subsamples random sequences, seeding alters which random sequences will be
+#' picked. This helps to ensure deterministic output which can be achieved by
+#' using the same seed. To pick a random seed, set `seed=-1`.
+#' @param klet Specify the k-let length to preserve during shuffling. This only
+#' affects the output if `algo="shuffled"` is set. -1 chooses the default value.
+#' @param sort Sort based on the counts from highest to lowest. By default,
+#' the output given is sorted alphabetically on kmers (AA... first, TT... last).
+#' @param threads Number of threads to use. Currently unsupported, changing the
+#' value will make no difference in performance.
+#'
+#' @return Dataframe containing the counts for all k-mers.
+#' @useDynLib rkats, .registration = TRUE
+#' @export
+#'
+#' @examples
+#' 
+kmer_presence <- function(input, kmer = 3, algo=c("regular","shuffled"),
+                        bootstrap_iters = 0, sample = 25, seed = -1, klet = -1,
+                        sort = FALSE, threads = 1) {
+  if(!is.character(input) && !is.list(input))
+    stop("input must be a file path or a vector/list of sequences")
+  if(!is.numeric(kmer) || kmer %% 1 != 0)
+    stop("kmer must be an integer")
+  if(!is.numeric(bootstrap_iters) || bootstrap_iters %% 1 != 0)
+    stop("bootstrap_iters must be an integer")
+  if(!is.numeric(sample) || sample <= 0 || 100 < sample)
+    stop("sample must be a number between 0-100")
+  if(!is.numeric(seed) || seed %% 1 != 0)
+    stop("seed must be an integer")
+  if(!is.numeric(klet) || klet %% 1 != 0)
+    stop("klet must be an integer")
+  if(!is.logical(sort))
+    stop("sort must be logical")
+  if(!is.numeric(threads) || threads %% 1 != 0)
+    stop("threads must be an integer")
+
+  if(is.list(input) || length(input) > 1) {
+    input <- unlist(input, use.names = FALSE)
+    if(!is.character(input) || anyNA(input))
+      stop("sequences must be character strings")
+    tmp <- tempfile()
+    on.exit(unlink(tmp), add = TRUE)
+    writeLines(input, tmp)
+    input <- tmp
+  } else {
+    input <- path.expand(input)
+  }
+
+  sample <- as.integer((sample*1000) %% 100001)
+  algo <- match.arg(algo)
+  algo <- if(algo == "regular") 1 else 2
+
+  .Call("presence_R",
+        input,
+        as.integer(kmer),
+        as.integer(klet),
+        as.integer(sort),
+        as.integer(bootstrap_iters),
+        as.integer(sample),
+        as.integer(algo),
+        as.integer(seed),
+        as.integer(threads))
+}
+
+
 #' Search for a sequence within a sequence
 #'
 #' This function returns the index in which a sub-sequence is found within a

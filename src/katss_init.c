@@ -15,12 +15,14 @@ tools::package_native_routine_registration_skeleton(".")
 extern SEXP count_kmers_R(void *, void *, void *, void *, void *, void *, void *, void *, void *);
 extern SEXP enrichments_R(void *, void *, void *, void *, void *, void *, void *, void *, void *, void *);
 extern SEXP ikke_R(void *, void *, void *, void *, void *, void *, void *);
+extern SEXP presence_R(void *, void *, void *, void *, void *, void *, void *, void *, void *);
 extern SEXP seqseq_R(void *, void *, void *);
 
 static const R_CallMethodDef CallEntries[] = {
     {"count_kmers_R", (DL_FUNC) &count_kmers_R,  9},
     {"enrichments_R", (DL_FUNC) &enrichments_R, 10},
     {"ikke_R",        (DL_FUNC) &ikke_R,         7},
+    {"presence_R",    (DL_FUNC) &presence_R,     9},
     {"seqseq_R",      (DL_FUNC) &seqseq_R,       3},
     {NULL, NULL, 0}
 };
