@@ -56,3 +56,49 @@ That means that a k-mer is counted at most 1 time per sequnce (no repeats).
 The final table then represents how many sequences a given k-mer is present in
 given a dataset.
 }
+\examples{
+# Load data
+data(rbfox2_seqs)
+
+# Count di-nucleotides from a vector of sequences
+kmer_presence(rbfox2_seqs$bound, kmer = 2)
+
+# Count a single sequence by wrapping it in a list, otherwise it will treat
+# it as a filename
+kmer_presence(list("ACGTACGT"), kmer = 2)
+
+# Create temporary file with sequences
+tf <- tempfile()
+writeLines(rbfox2_seqs$bound, tf)
+
+# Count presence of di-nucleotides in file
+kmer_presence(tf, kmer = 2)
+
+# Count presence of mono-nucleotides in file
+kmer_presence(tf, kmer = 1)
+
+# Count kmer presence of shuffled sequences
+kmer_presence(tf, kmer = 1, algo = "shuffled")
+
+# Specify k-let to preserve during shuffling
+kmer_presence(tf, kmer = 1, algo = "shuffled", klet = 2)
+
+# Count kmer presence with bootstrap
+result <- kmer_presence(tf, bootstrap_iters = 100)
+head(result)
+
+# Subsample 55.55\% of the file per bootstrap iteration
+result <- kmer_presence(tf, bootstrap_iters = 100, sample = 55.55)
+head(result)
+
+# Count presence of kmers in shuffled sequences with bootstrap
+result <- kmer_presence(tf, algo = "shuffled", bootstrap_iters = 100)
+head(result)
+
+# Sort by number of counts, descending
+result <- kmer_presence(tf, kmer = 5, sort = TRUE)
+head(result)
+
+# Cleanup file
+unlink(tf)
+}
