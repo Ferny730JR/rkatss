@@ -2,4 +2,5 @@
 ^\.Rproj\.user$
 ^LICENSE\.md$
 ^\.vscode$
+^\.clangd$
 build
